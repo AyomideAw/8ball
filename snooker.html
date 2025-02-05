@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Snooker Game</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f0f0f0;
+      margin: 0;
+      padding: 0;
+    }
+
+    #pool-table-container {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+
+    #pool-table {
+      width: 199px;
+      height: 390px;
+      border: 1px solid black;
+      background-color: #006400;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 36px;
+      color: #333;
+      margin-top: 50px;
+    }
+
+    #player-form-container {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    #player-form input {
+      margin: 0 10px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Let's Play Snooker!!! </h1>
+  <div id="player-form-container">
+    <form id="player-form">
+      <label for="player1">Player 1 Name:</label>
+      <input type="text" id="player1" name="player1" required>
+      <label for="player2">Player 2 Name:</label>
+      <input type="text" id="player2" name="player2" required>
+      <button type="submit">Start Game</button>
+    </form>
+  </div>
+  <p id="current-player" style="text-align: center; font-size: 24px; margin-top: 20px;"></p>
+  <div id="pool-table-container">
+    <svg id="pool-table" viewBox="0 0 700 1375">
+      <rect width="675" height="1350" x="12.5" y="12.5" fill="darkgreen" />
+      <rect width="700" height="25" x="0" y="0" fill="grey" />
+      <rect width="700" height="25" x="0" y="1350" fill="grey" />
+      <rect width="25" height="1375" x="0" y="0" fill="grey" />
+      <rect width="25" height="1375" x="675" y="0" fill="grey" />
+      <circle class="hole" cx="25" cy="25" r="25" fill="black" />
+      <circle class="hole" cx="675" cy="25" r="25" fill="black" />
+      <circle class="hole" cx="25" cy="675" r="25" fill="black" />
+      <circle class="hole" cx="675" cy="675" r="25" fill="black" />
+      <circle class="hole" cx="25" cy="1350" r="25" fill="black" />
+      <circle class="hole" cx="675" cy="1350" r="25" fill="black" />
+      <circle id="cue-ball" class="ball" cx="337.5" cy="1192.5" r="14.25" fill="white" />
+      <circle id="ball1" class="ball" cx="337.5" cy="337.5" r="14.25" fill="black" />
+      <circle id="ball2" class="ball" cx="322.75" cy="311.82" r="14.25" fill="blue" />
+      <circle id="ball3" class="ball" cx="352.65" cy="310.63" r="14.25" fill="yellow" />
+      <circle id="ball4" class="ball" cx="367.5" cy="337.5" r="14.25" fill="orange" />
+    </svg>
+  </div>
+
+  <script>
+    let currentPlayer = 1;
+    let playerNames = ["", ""];
+    let coloredBallPocketed = false; // To track if a colored ball has been pocketed
+
+    document.addEventListener("DOMContentLoaded", function() {
+      const cueBall = document.getElementById("cue-ball");
+      const cueBallStartX = 337.5; // Starting X position for the cue ball
+      const cueBallStartY = 1192.5; // Starting Y position for the cue ball
+      cueBall.velocityX = 0;
+      cueBall.velocityY = 0;
+      cueBall.mass = 1;
+    
+      const otherBalls = document.querySelectorAll('.ball:not(#cue-ball)');
+      otherBalls.forEach(ball => {
+        ball.velocityX = 0;
+        ball.velocityY = 0;
+        ball.mass = 1;
+      });
+    
+      const poolTable = document.getElementById("pool-table");
+      const holes = document.querySelectorAll('.hole');
+      let shotLine;
+      const friction = 0.98;
+      let animationFrameId;
+    
+      cueBall.addEventListener("mousedown", startDrag);
+      document.addEventListener("mouseup", endDrag);
+
+      document.getElementById('player-form').addEventListener('submit', function(event) {
+        event.preventDefault(); // Prevent the default form submission
+        playerNames[0] = document.getElementById('player1').value;
+        playerNames[1] = document.getElementById('player2').value;
+
+        // Hide the form to show the pool table
+        document.getElementById('player-form-container').style.display = 'none';
+
+        // Start the game and choose the starting player
+        chooseFirstPlayer();
+      });
+
+      function chooseFirstPlayer() {
+        // Randomly select player 1 or 2
+        currentPlayer = Math.floor(Math.random() * 2) + 1;
+        updateCurrentPlayerDisplay();
+      }
+
+      function updateCurrentPlayerDisplay() {
+        const currentPlayerName = playerNames[currentPlayer - 1];
+        document.getElementById('current-player').textContent = "Current Player: " + currentPlayerName;
+      }
+
+    function alternateTurn() {
+      currentPlayer = currentPlayer === 1 ? 2 : 1;
+      updateCurrentPlayerDisplay();
+    }
+    
+      function startDrag(event) {
+        event.preventDefault();
+        shotLine = document.createElementNS("http://www.w3.org/2000/svg", "line");
+        shotLine.setAttribute("id", "shot-line");
+        shotLine.setAttribute("stroke", "red");
+        shotLine.setAttribute("stroke-width", "2");
+        poolTable.appendChild(shotLine);
+        document.addEventListener("mousemove", drag);
+      }
+    
+      function drag(event) {
+        const pt = poolTable.createSVGPoint();
+        pt.x = event.clientX;
+        pt.y = event.clientY;
+        const svgP = pt.matrixTransform(poolTable.getScreenCTM().inverse());
+    
+        shotLine.setAttribute("x1", cueBall.cx.baseVal.value);
+        shotLine.setAttribute("y1", cueBall.cy.baseVal.value);
+        shotLine.setAttribute("x2", svgP.x);
+        shotLine.setAttribute("y2", svgP.y);
+      }
+    
+      function endDrag(event) {
+        document.removeEventListener("mousemove", drag);
+        poolTable.removeChild(shotLine);
+    
+        const pt = poolTable.createSVGPoint();
+        pt.x = event.clientX;
+        pt.y = event.clientY;
+        const svgP = pt.matrixTransform(poolTable.getScreenCTM().inverse());
+    
+        cueBall.velocityX = (svgP.x - cueBall.cx.baseVal.value) * 0.05;
+        cueBall.velocityY = (svgP.y - cueBall.cy.baseVal.value) * 0.05;
+    
+        requestAnimationFrame(animate);
+      }
+    
+      function animate() {
+        cancelAnimationFrame(animationFrameId);
+    
+        updatePosition(cueBall);
+    
+        otherBalls.forEach(ball => {
+          updatePosition(ball);
+          if (checkCollision(cueBall, ball)) handleCollision(cueBall, ball);
+    
+          otherBalls.forEach(otherBall => {
+            if (ball !== otherBall && checkCollision(ball, otherBall)) {
+              handleCollision(ball, otherBall);
+            }
+          });
+        });
+    
+        cueBall.velocityX *= friction;
+        cueBall.velocityY *= friction;
+    
+        otherBalls.forEach(ball => {
+          ball.velocityX *= friction;
+          ball.velocityY *= friction;
+        });
+    
+        animationFrameId = requestAnimationFrame(animate);
+      }
+    
+      function updatePosition(ball) {
+        const radius = ball.r.baseVal.value;
+        ball.cx.baseVal.value += ball.velocityX;
+        ball.cy.baseVal.value += ball.velocityY;
+
+        // For horizontal boundaries, considering the left and right cushions
+        if (ball.cx.baseVal.value - radius < 25) {
+            ball.velocityX = Math.abs(ball.velocityX); // Bounce off the left cushion
+        } else if (ball.cx.baseVal.value + radius > 675) { // Adjusted for inner cushion
+            ball.velocityX = -Math.abs(ball.velocityX); // Bounce off the right cushion
+        }
+
+        // For vertical boundaries, considering the top and bottom cushions
+        if (ball.cy.baseVal.value - radius < 25) {
+            ball.velocityY = Math.abs(ball.velocityY); // Bounce off the top cushion
+        } else if (ball.cy.baseVal.value + radius > 1350) { // Adjusted for inner cushion
+            ball.velocityY = -Math.abs(ball.velocityY); // Bounce off the bottom cushion
+        }
+
+        // Reset the cue ball if it enters a hole
+        if (ball === cueBall && checkHoleCollision(cueBall)) {
+          resetCueBall();
+        }
+
+        // New logic to make colored balls disappear if they enter a hole
+        if (ball !== cueBall && checkHoleCollision(ball)) {
+          ball.style.visibility = 'hidden'; // Hide the ball
+          // Optionally, you can also stop the ball's movement
+          ball.velocityX = 0;
+          ball.velocityY = 0;
+          coloredBallPocketed = true; // Mark that a colored ball has been pocketed
+        }
+      }
+    
+      function checkHoleCollision(ball) {
+        for (const hole of holes) {
+          const dx = hole.cx.baseVal.value - ball.cx.baseVal.value;
+          const dy = hole.cy.baseVal.value - ball.cy.baseVal.value;
+          if (Math.sqrt(dx * dx + dy * dy) < hole.r.baseVal.value) {
+            return true; // Ball is inside a hole
+          }
+        }
+        return false;
+      }
+    
+      function resetCueBall() {
+        cueBall.cx.baseVal.value = cueBallStartX;
+        cueBall.cy.baseVal.value = cueBallStartY;
+        cueBall.velocityX = 0;
+        cueBall.velocityY = 0;
+        // Change the player only if no colored ball has been pocketed
+        if (!coloredBallPocketed) {
+          alternateTurn();
+        }
+        // Reset the flag as the turn has ended
+        coloredBallPocketed = false;
+      }
+    
+      // The checkCollision and handleCollision functions remain unchanged
+      function checkCollision(ball1, ball2) {
+        const dx = ball2.cx.baseVal.value - ball1.cx.baseVal.value;
+        const dy = ball2.cy.baseVal.value - ball1.cy.baseVal.value;
+        return Math.sqrt(dx * dx + dy * dy) < (ball1.r.baseVal.value + ball2.r.baseVal.value);
+      }
+    
+      function handleCollision(ball1, ball2) {
+        const dx = ball2.cx.baseVal.value - ball1.cx.baseVal.value;
+        const dy = ball2.cy.baseVal.value - ball1.cy.baseVal.value;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        // Normalize the direction vector (nx, ny)
+        const nx = dx / distance;
+        const ny = dy / distance;
+
+        // Calculate velocity components along the normal and tangent directions
+        const v1 = {x: ball1.velocityX, y: ball1.velocityY};
+        const v2 = {x: ball2.velocityX, y: ball2.velocityY};
+        const v1n = v1.x * nx + v1.y * ny;
+        const v1t = -v1.x * ny + v1.y * nx;
+        const v2n = v2.x * nx + v2.y * ny;
+        const v2t = -v2.x * ny + v2.y * nx;
+
+        // Conservation of momentum in the normal direction (elastic collision)
+        const v1nPost = (v1n * (ball1.mass - ball2.mass) + 2 * ball2.mass * v2n) / (ball1.mass + ball2.mass);
+        const v2nPost = (v2n * (ball2.mass - ball1.mass) + 2 * ball1.mass * v1n) / (ball1.mass + ball2.mass);
+
+        // Convert the velocity components back
+        ball1.velocityX = v1nPost * nx - v1t * ny;
+        ball1.velocityY = v1nPost * ny + v1t * nx;
+        ball2.velocityX = v2nPost * nx - v2t * ny;
+        ball2.velocityY = v2nPost * ny + v2t * nx;
+
+        // Separate overlapping balls slightly to prevent sticking
+        const overlap = (ball1.r.baseVal.value + ball2.r.baseVal.value - distance + 1) / 2;
+        ball1.cx.baseVal.value -= overlap * nx;
+        ball1.cy.baseVal.value -= overlap * ny;
+        ball2.cx.baseVal.value += overlap * nx;
+        ball2.cy.baseVal.value += overlap * ny;
+      }
+    });
+  </script>
+</body>
+</html>
